@@ -1,0 +1,54 @@
+# Node modules
+node_modules/
+
+# Build output
+dist/
+build/
+out/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test coverage/output
+coverage/
+*.lcov
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+
+# Misc
+*.tgz
+*.zip
+
+# S3 test files (if any)
+test-upload.txt
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Jest cache
+jest-cache/
+jest-test-results.json
+
+# Optional: ignore package-lock if you want a minimal repo (not recommended for teams)
+# package-lock.json
+
+# Optional: ignore uploads or generated files
+uploads/
+generated/
