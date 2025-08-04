@@ -68,9 +68,7 @@ export interface Model {
   name: string;
   status: 'pending' | 'training' | 'completed' | 'failed';
   temp_folder_name?: string;
-  final_model_id?: string; // Legacy FAL AI model ID (deprecated)
   higgsfield_id?: string; // 302.AI character ID
-  model_name?: string; // Name sent to 302.AI
   thumbnail_url?: string; // 302.AI training thumbnail
   photo_count: number;
   created_at: Date;

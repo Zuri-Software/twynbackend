@@ -172,13 +172,13 @@ export async function createModel(modelData: {
 }
 
 // Update model status
-export async function updateModelStatus(modelId: string, status: 'pending' | 'training' | 'completed' | 'failed', finalModelId?: string, thumbnailUrl?: string): Promise<Model | null> {
+export async function updateModelStatus(modelId: string, status: 'pending' | 'training' | 'completed' | 'failed', higgsFieldId?: string, thumbnailUrl?: string): Promise<Model | null> {
   const result = await query(
     `UPDATE models 
-     SET status = $2, final_model_id = COALESCE($3, final_model_id), thumbnail_url = COALESCE($4, thumbnail_url), updated_at = NOW() 
+     SET status = $2, higgsfield_id = COALESCE($3, higgsfield_id), thumbnail_url = COALESCE($4, thumbnail_url), updated_at = NOW() 
      WHERE id = $1 
      RETURNING *`,
-    [modelId, status, finalModelId, thumbnailUrl]
+    [modelId, status, higgsFieldId, thumbnailUrl]
   );
   
   return result.rows[0] || null;
