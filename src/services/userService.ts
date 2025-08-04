@@ -184,6 +184,16 @@ export async function updateModelStatus(modelId: string, status: 'pending' | 'tr
   return result.rows[0] || null;
 }
 
+// Get specific model by ID (with user verification)
+export async function getModelById(modelId: string, userId: string): Promise<Model | null> {
+  const result = await query(
+    'SELECT * FROM models WHERE id = $1 AND user_id = $2',
+    [modelId, userId]
+  );
+  
+  return result.rows[0] || null;
+}
+
 // Log user action
 export async function logUserAction(userId: string, action: 'generate' | 'train' | 'upload' | 'upgrade', count: number = 1, metadata?: any): Promise<void> {
   await query(
