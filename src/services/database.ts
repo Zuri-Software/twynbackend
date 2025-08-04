@@ -7,9 +7,10 @@ dotenv.config();
 // Database connection pool
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  max: 20, // Maximum number of connections
+  max: 10, // Reduced for Railway
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 30000, // 30 second timeout for Railway
+  query_timeout: 30000, // 30 second query timeout
   ssl: {
     rejectUnauthorized: false // Required for Supabase
   }
