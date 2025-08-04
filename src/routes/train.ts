@@ -38,11 +38,11 @@ router.get('/:id/status', async (req, res) => {
     
     // If model is completed and has higgsfield_id, also check 302.AI status
     let aiStatus = null;
-    if (model.status === 'completed' && model.final_model_id) {
+    if (model.status === 'completed' && model.higgsfield_id) {
       try {
-        aiStatus = await getTrainingStatus(model.final_model_id);
+        aiStatus = await getTrainingStatus(model.higgsfield_id);
       } catch (aiErr) {
-        console.warn(`Failed to get 302.AI status for ${model.final_model_id}:`, aiErr);
+        console.warn(`Failed to get 302.AI status for ${model.higgsfield_id}:`, aiErr);
       }
     }
     
@@ -50,7 +50,7 @@ router.get('/:id/status', async (req, res) => {
       modelId: model.id,
       status: model.status,
       name: model.name,
-      higgsfield_id: model.final_model_id,
+      higgsfield_id: model.higgsfield_id,
       thumbnail_url: model.thumbnail_url,
       photo_count: model.photo_count,
       created_at: model.created_at,
