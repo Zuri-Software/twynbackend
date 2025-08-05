@@ -34,11 +34,26 @@ export async function handleGenerate(req: Request, res: Response) {
   try {
     console.log(`[Generate] User ${req.user.id} generating with style: ${style_id}, character: ${higgsfield_id || 'none'}`);
 
-    // Generate images using 302.AI
-    const imageUrls = await generateWithCharacter({
+    // Generate a unique generation ID for tracking
+    const generationId = `gen_${req.user.id}_${Date.now()}`;
+
+    // Return immediately with generation started message
+    res.json({
+      generationId,
+      status: 'started',
+      message: 'Generation started, you will receive a push notification when complete',
       prompt,
       style_id,
-      higgsfield_id: higgsfield_id || undefined, // Optional - for custom trained character
+      higgsfield_id: higgsfield_id || null
+    });
+
+    // Continue generation in background with push notification on completion
+    processGenerationWithNotification({
+      generationId,
+      userId: req.user.id,
+      prompt,
+      style_id,
+      higgsfield_id: higgsfield_id || undefined,
       quality: quality as 'basic' | 'high',
       aspect_ratio,
       enhance_prompt,
@@ -46,12 +61,48 @@ export async function handleGenerate(req: Request, res: Response) {
       seed
     });
 
-    console.log(`[Generate] Got ${imageUrls.length} images from 302.AI`);
+  } catch (error: any) {
+    console.error('Generate controller error:', error);
+    return res.status(500).json({ 
+      error: error?.message || 'Generation failed',
+      details: error?.stack || 'No additional details'
+    });
+  }
+}
+
+// Background processing with push notification
+async function processGenerationWithNotification(params: {
+  generationId: string;
+  userId: string;
+  prompt: string;
+  style_id: string;
+  higgsfield_id?: string;
+  quality: 'basic' | 'high';
+  aspect_ratio: string;
+  enhance_prompt: boolean;
+  negative_prompt: string;
+  seed: number;
+}) {
+  try {
+    console.log(`[Generate Background] Starting generation ${params.generationId}`);
+
+    // Generate images using 302.AI
+    const imageUrls = await generateWithCharacter({
+      prompt: params.prompt,
+      style_id: params.style_id,
+      higgsfield_id: params.higgsfield_id,
+      quality: params.quality,
+      aspect_ratio: params.aspect_ratio,
+      enhance_prompt: params.enhance_prompt,
+      negative_prompt: params.negative_prompt,
+      seed: params.seed
+    });
+
+    console.log(`[Generate Background] Got ${imageUrls.length} images from 302.AI for ${params.generationId}`);
 
     // S3 folder structure - use style_id or higgsfield_id for organization
-    const modelId = higgsfield_id || style_id;
-    const userId = req.user.id;
-    const s3Folder = `users/${userId}/${modelId}/generations`;
+    const modelId = params.higgsfield_id || params.style_id;
+    const s3Folder = `users/${params.userId}/${modelId}/generations`;
 
     // Download images from 302.AI and upload to S3
     const s3Images = await Promise.all(
@@ -70,37 +121,61 @@ export async function handleGenerate(req: Request, res: Response) {
       })
     );
 
-    console.log(`[Generate] Uploaded ${s3Images.length} images to S3`);
+    console.log(`[Generate Background] Uploaded ${s3Images.length} images to S3 for ${params.generationId}`);
 
     // Track usage
-    await incrementGenerationCount(req.user.id, s3Images.length);
-    await logUserAction(req.user.id, 'generate', s3Images.length, {
-      prompt,
-      style_id,
-      higgsfield_id: higgsfield_id || null,
-      quality,
-      aspect_ratio,
+    await incrementGenerationCount(params.userId, s3Images.length);
+    await logUserAction(params.userId, 'generate', s3Images.length, {
+      generationId: params.generationId,
+      prompt: params.prompt,
+      style_id: params.style_id,
+      higgsfield_id: params.higgsfield_id || null,
+      quality: params.quality,
+      aspect_ratio: params.aspect_ratio,
       imageCount: s3Images.length,
       timestamp: new Date()
     });
 
-    // Respond with generated image URLs
-    return res.status(200).json({
-      images: s3Images,
-      count: s3Images.length,
-      modelId,
-      style_id,
-      higgsfield_id: higgsfield_id || null,
-      prompt,
-      quality,
-      aspect_ratio
-    });
+    console.log(`[Generate Background] Completed generation ${params.generationId}`);
 
-  } catch (error: any) {
-    console.error('Generate controller error:', error);
-    return res.status(500).json({ 
-      error: error?.message || 'Generation failed',
-      details: error?.stack || 'No additional details'
-    });
+    // Send push notification to user with generated images
+    await sendGenerationCompletedNotification(params.userId, params.generationId, s3Images);
+
+  } catch (error) {
+    console.error(`[Generate Background] Error in generation ${params.generationId}:`, error);
+    
+    // Notify user of failure
+    await sendGenerationFailedNotification(params.userId, params.generationId);
+  }
+}
+
+// Push notification functions
+async function sendGenerationCompletedNotification(userId: string, generationId: string, imageUrls: string[]) {
+  try {
+    // TODO: Implement actual push notification service (Firebase, APNs, etc.)
+    console.log(`[Push] Would send generation completion notification to user ${userId}: Generation ${generationId} completed with ${imageUrls.length} images`);
+    
+    // For now, just log - you'll need to integrate with Firebase/APNs
+    // await pushNotificationService.send(userId, {
+    //   title: "Generation Complete!",
+    //   body: `Your images are ready to view`,
+    //   data: { generationId, imageUrls, type: 'generation_completed' }
+    // });
+  } catch (error) {
+    console.error('Failed to send generation completion notification:', error);
+  }
+}
+
+async function sendGenerationFailedNotification(userId: string, generationId: string) {
+  try {
+    console.log(`[Push] Would send generation failure notification to user ${userId}: Generation ${generationId} failed`);
+    
+    // await pushNotificationService.send(userId, {
+    //   title: "Generation Failed",
+    //   body: "Your image generation could not be completed. Please try again.",
+    //   data: { generationId, type: 'generation_failed' }
+    // });
+  } catch (error) {
+    console.error('Failed to send generation failure notification:', error);
   }
 }
