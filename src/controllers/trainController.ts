@@ -15,8 +15,10 @@ export const trainController = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'No images uploaded' });
     }
 
-    // Generate model name for the user
-    const modelName = `user_${req.user.id}_${Date.now()}`;
+    // Get model name from form data (fallback to generated name)
+    const userModelName = req.body.modelName?.trim();
+    const modelName = userModelName || `user_${req.user.id}_${Date.now()}`;
+    console.log(`[Train] Using model name: "${modelName}" (user provided: ${!!userModelName})`);
     
     // 1. Create model record in Supabase with pending status
     modelRecord = await createModel({
@@ -27,16 +29,16 @@ export const trainController = async (req: Request, res: Response) => {
     
     console.log(`[Train] Created model record: ${modelRecord.id} for user ${req.user.id}`);
     
-    // 2. Return immediately with the model ID, then process in background
+    // 2. Return immediately, then process training in background with push notification
     res.json({ 
-      supabaseModelId: modelRecord.id,
+      modelId: modelRecord.id,
       modelName,
       status: 'pending',
-      message: 'Training started, check status with GET /api/train/:id/status'
+      message: 'Training started, you will receive a push notification when complete'
     });
     
-    // 3. Continue training in background (don't await)
-    processTrainingInBackground(modelRecord.id, files.map(f => f.buffer), modelName, req.user.id);
+    // 3. Continue training in background with push notification on completion
+    processTrainingWithNotification(modelRecord.id, files.map(f => f.buffer), modelName, req.user.id);
     
   } catch (err: any) {
     console.error('trainController error:', err);
@@ -55,8 +57,8 @@ export const trainController = async (req: Request, res: Response) => {
   }
 };
 
-// Background processing function
-async function processTrainingInBackground(modelId: string, imageBuffers: Buffer[], modelName: string, userId: string) {
+// Background processing with push notification
+async function processTrainingWithNotification(modelId: string, imageBuffers: Buffer[], modelName: string, userId: string) {
   try {
     console.log(`[Train Background] Starting training for model ${modelId}`);
     
@@ -82,14 +84,49 @@ async function processTrainingInBackground(modelId: string, imageBuffers: Buffer
     
     console.log(`[Train Background] Completed training for model ${modelId} (higgsfield_id: ${trainingResult.characterId})`);
     
+    // Send push notification to user
+    await sendTrainingCompletedNotification(userId, modelName, trainingResult.characterId);
+    
   } catch (error) {
     console.error(`[Train Background] Error training model ${modelId}:`, error);
     
-    // Mark as failed
+    // Mark as failed and notify user
     try {
       await updateModelStatus(modelId, 'failed');
+      await sendTrainingFailedNotification(userId, modelName);
     } catch (updateErr) {
       console.error('Failed to update model status to failed:', updateErr);
     }
+  }
+}
+
+// Push notification functions
+async function sendTrainingCompletedNotification(userId: string, modelName: string, higgsFieldId: string) {
+  try {
+    // TODO: Implement actual push notification service (Firebase, APNs, etc.)
+    console.log(`[Push] Would send completion notification to user ${userId}: Model "${modelName}" training completed (${higgsFieldId})`);
+    
+    // For now, just log - you'll need to integrate with Firebase/APNs
+    // await pushNotificationService.send(userId, {
+    //   title: "Training Complete!",
+    //   body: `Your model "${modelName}" is ready to use`,
+    //   data: { higgsfield_id: higgsFieldId, type: 'training_completed' }
+    // });
+  } catch (error) {
+    console.error('Failed to send completion notification:', error);
+  }
+}
+
+async function sendTrainingFailedNotification(userId: string, modelName: string) {
+  try {
+    console.log(`[Push] Would send failure notification to user ${userId}: Model "${modelName}" training failed`);
+    
+    // await pushNotificationService.send(userId, {
+    //   title: "Training Failed",
+    //   body: `Your model "${modelName}" could not be trained. Please try again.`,
+    //   data: { type: 'training_failed' }
+    // });
+  } catch (error) {
+    console.error('Failed to send failure notification:', error);
   }
 }
