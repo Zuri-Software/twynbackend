@@ -5,7 +5,8 @@ import {
   getUserUsage, 
   getUserModelsController,
   upgradeUser,
-  completeOnboarding
+  completeOnboarding,
+  registerDeviceTokenController
 } from '../controllers/userController';
 import { authenticateUser } from '../middleware/auth';
 import { checkUsageLimits } from '../middleware/usageLimits';
@@ -32,5 +33,8 @@ router.post('/upgrade', upgradeUser);
 
 // POST /api/users/complete-onboarding - Mark onboarding as completed
 router.post('/complete-onboarding', completeOnboarding);
+
+// POST /api/users/register-device - Register device token for push notifications
+router.post('/register-device', registerDeviceTokenController);
 
 export default router;

@@ -152,15 +152,19 @@ async function processGenerationWithNotification(params: {
 // Push notification functions
 async function sendGenerationCompletedNotification(userId: string, generationId: string, imageUrls: string[]) {
   try {
-    // TODO: Implement actual push notification service (Firebase, APNs, etc.)
-    console.log(`[Push] Would send generation completion notification to user ${userId}: Generation ${generationId} completed with ${imageUrls.length} images`);
+    const { pushNotificationService } = require('../services/pushNotificationService');
     
-    // For now, just log - you'll need to integrate with Firebase/APNs
-    // await pushNotificationService.send(userId, {
-    //   title: "Generation Complete!",
-    //   body: `Your images are ready to view`,
-    //   data: { generationId, imageUrls, type: 'generation_completed' }
-    // });
+    await pushNotificationService.sendToUser(userId, {
+      title: "Generation Complete!",
+      body: `Your ${imageUrls.length} images are ready to view`,
+      type: 'generation_complete',
+      data: { 
+        generationId, 
+        imageUrls: imageUrls.slice(0, 4) // Limit URL array size in notification
+      }
+    });
+    
+    console.log(`[Push] ✅ Sent generation completion notification to user ${userId}: Generation ${generationId}`);
   } catch (error) {
     console.error('Failed to send generation completion notification:', error);
   }
@@ -168,13 +172,16 @@ async function sendGenerationCompletedNotification(userId: string, generationId:
 
 async function sendGenerationFailedNotification(userId: string, generationId: string) {
   try {
-    console.log(`[Push] Would send generation failure notification to user ${userId}: Generation ${generationId} failed`);
+    const { pushNotificationService } = require('../services/pushNotificationService');
     
-    // await pushNotificationService.send(userId, {
-    //   title: "Generation Failed",
-    //   body: "Your image generation could not be completed. Please try again.",
-    //   data: { generationId, type: 'generation_failed' }
-    // });
+    await pushNotificationService.sendToUser(userId, {
+      title: "Generation Failed",
+      body: "Your image generation could not be completed. Please try again.",
+      type: 'generation_failed',
+      data: { generationId }
+    });
+    
+    console.log(`[Push] ✅ Sent generation failure notification to user ${userId}: Generation ${generationId}`);
   } catch (error) {
     console.error('Failed to send generation failure notification:', error);
   }

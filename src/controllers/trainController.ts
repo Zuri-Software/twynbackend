@@ -103,15 +103,16 @@ async function processTrainingWithNotification(modelId: string, imageBuffers: Bu
 // Push notification functions
 async function sendTrainingCompletedNotification(userId: string, modelName: string, higgsFieldId: string) {
   try {
-    // TODO: Implement actual push notification service (Firebase, APNs, etc.)
-    console.log(`[Push] Would send completion notification to user ${userId}: Model "${modelName}" training completed (${higgsFieldId})`);
+    const { pushNotificationService } = require('../services/pushNotificationService');
     
-    // For now, just log - you'll need to integrate with Firebase/APNs
-    // await pushNotificationService.send(userId, {
-    //   title: "Training Complete!",
-    //   body: `Your model "${modelName}" is ready to use`,
-    //   data: { higgsfield_id: higgsFieldId, type: 'training_completed' }
-    // });
+    await pushNotificationService.sendToUser(userId, {
+      title: "Training Complete!",
+      body: `Your model "${modelName}" is ready to use`,
+      type: 'training_complete',
+      data: { higgsfield_id: higgsFieldId, modelName }
+    });
+    
+    console.log(`[Push] ✅ Sent training completion notification to user ${userId}: Model "${modelName}" (${higgsFieldId})`);
   } catch (error) {
     console.error('Failed to send completion notification:', error);
   }
@@ -119,13 +120,16 @@ async function sendTrainingCompletedNotification(userId: string, modelName: stri
 
 async function sendTrainingFailedNotification(userId: string, modelName: string) {
   try {
-    console.log(`[Push] Would send failure notification to user ${userId}: Model "${modelName}" training failed`);
+    const { pushNotificationService } = require('../services/pushNotificationService');
     
-    // await pushNotificationService.send(userId, {
-    //   title: "Training Failed",
-    //   body: `Your model "${modelName}" could not be trained. Please try again.`,
-    //   data: { type: 'training_failed' }
-    // });
+    await pushNotificationService.sendToUser(userId, {
+      title: "Training Failed",
+      body: `Your model "${modelName}" could not be trained. Please try again.`,
+      type: 'training_failed',
+      data: { modelName }
+    });
+    
+    console.log(`[Push] ✅ Sent training failure notification to user ${userId}: Model "${modelName}"`);
   } catch (error) {
     console.error('Failed to send failure notification:', error);
   }

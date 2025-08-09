@@ -157,16 +157,13 @@ async function pollTrainingCompletion(taskId: string): Promise<{characterId: str
       const results = await resultsResponse.json();
       console.log(`Training poll response:`, results);
 
-      // Check if task is completed
-      if (results.jobs && results.jobs.length > 0) {
-        const job = results.jobs[0];
-        if (job.status === 'completed') {
-          // Extract character_id and thumbnail from the completed training
-          const characterId = results.id || results.character_id || taskId;
-          const thumbnailUrl = results.thumbnail_url;
-          console.log(`Training completed! Character ID: ${characterId}, Thumbnail: ${thumbnailUrl}`);
-          return { characterId, thumbnailUrl };
-        }
+      // Check if task is completed - 302.AI returns status at root level
+      if (results.status === 'completed') {
+        // Extract character_id and thumbnail from the completed training
+        const characterId = results.id || results.character_id || taskId;
+        const thumbnailUrl = results.thumbnail_url;
+        console.log(`Training completed! Character ID: ${characterId}, Thumbnail: ${thumbnailUrl}`);
+        return { characterId, thumbnailUrl };
       }
 
       if (results.status === 'failed' || results.status === 'error') {
@@ -373,19 +370,10 @@ export async function getTrainingStatus(taskId: string) {
 
     const results = await response.json();
     
-    // Return simplified status for compatibility
-    if (results.jobs && results.jobs.length > 0) {
-      const job = results.jobs[0];
-      return {
-        status: job.status,
-        higgsfield_id: results.id || taskId,
-        result: results
-      };
-    }
-    
+    // Return status from root level - 302.AI returns status directly
     return {
-      status: 'pending',
-      higgsfield_id: taskId,
+      status: results.status || 'pending',
+      higgsfield_id: results.id || taskId,
       result: results
     };
   } catch (error) {

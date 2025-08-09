@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { getSupabaseUserProfile } from '../services/supabase';
-import { updateUserProfile as updateUserProfileDB, upgradeUserToPro, logUserAction, getUserModels, completeUserOnboarding } from '../services/userService';
+import { updateUserProfile as updateUserProfileDB, upgradeUserToPro, logUserAction, getUserModels, completeUserOnboarding, registerDeviceToken } from '../services/userService';
 import { getUserLimits } from '../config/limits';
 
 // Get user profile (combines Supabase auth data with our database data)
@@ -205,5 +205,36 @@ export async function completeOnboarding(req: Request, res: Response) {
   } catch (error) {
     console.error('Error completing onboarding:', error);
     res.status(500).json({ error: 'Failed to complete onboarding' });
+  }
+}
+
+// Register device token for push notifications
+export async function registerDeviceTokenController(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+    
+    const { deviceToken, platform } = req.body;
+    
+    if (!deviceToken) {
+      return res.status(400).json({ error: 'Missing required field: deviceToken' });
+    }
+    
+    if (!platform || !['ios', 'android'].includes(platform)) {
+      return res.status(400).json({ error: 'Missing or invalid platform field. Must be "ios" or "android"' });
+    }
+    
+    await registerDeviceToken(req.user.id, deviceToken, platform);
+    
+    console.log(`[UserController] Registered device token for user ${req.user.id}, platform: ${platform}`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Device token registered successfully'
+    });
+  } catch (error) {
+    console.error('Error registering device token:', error);
+    res.status(500).json({ error: 'Failed to register device token' });
   }
 }

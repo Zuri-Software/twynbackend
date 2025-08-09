@@ -201,3 +201,35 @@ export async function logUserAction(userId: string, action: 'generate' | 'train'
     [userId, action, count, metadata]
   );
 }
+
+// MARK: - Device Token Management
+
+export async function registerDeviceToken(userId: string, deviceToken: string, platform: 'ios' | 'android'): Promise<void> {
+  console.log(`[UserService] Registering device token for user ${userId}, platform: ${platform}`);
+  
+  await query(
+    `INSERT INTO device_tokens (user_id, device_token, platform, is_active) 
+     VALUES ($1, $2, $3, true)
+     ON CONFLICT (user_id, device_token) 
+     DO UPDATE SET is_active = true, updated_at = NOW()`,
+    [userId, deviceToken, platform]
+  );
+  
+  console.log(`[UserService] ✅ Device token registered successfully`);
+}
+
+export async function getActiveDeviceTokens(userId: string): Promise<Array<{token: string, platform: string}>> {
+  const result = await query(
+    'SELECT device_token as token, platform FROM device_tokens WHERE user_id = $1 AND is_active = true',
+    [userId]
+  );
+  
+  return result.rows;
+}
+
+export async function deactivateDeviceToken(userId: string, deviceToken: string): Promise<void> {
+  await query(
+    'UPDATE device_tokens SET is_active = false WHERE user_id = $1 AND device_token = $2',
+    [userId, deviceToken]
+  );
+}
