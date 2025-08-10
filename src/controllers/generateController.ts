@@ -3,6 +3,7 @@ import { generateWithCharacter } from '../services/302aiService';
 import { uploadBuffer } from '../services/s3';
 import { incrementGenerationCount, logUserAction } from '../services/userService';
 import { query } from '../services/database';
+import { v4 as uuidv4 } from 'uuid';
 
 
 export async function handleGenerate(req: Request, res: Response) {
@@ -35,8 +36,8 @@ export async function handleGenerate(req: Request, res: Response) {
   try {
     console.log(`[Generate] User ${req.user.id} generating with style: ${style_id}, character: ${higgsfield_id || 'none'}`);
 
-    // Generate a unique generation ID for tracking (with random suffix to avoid collisions)
-    const generationId = `gen_${req.user.id}_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+    // Generate a truly unique generation ID using UUID
+    const generationId = `gen_${uuidv4()}`;
 
     // Return immediately with generation started message
     res.json({
