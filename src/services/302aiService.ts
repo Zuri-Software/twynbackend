@@ -101,6 +101,9 @@ export async function generateWithCharacter(input: {
     }
 
     console.log('Submitting generation task to 302.AI:', generatePayload);
+    console.log('API URL:', `${BASE_URL}/higgsfield/text2image_soul`);
+    console.log('API Key present:', !!API_KEY);
+    console.log('API Key prefix:', API_KEY ? API_KEY.substring(0, 10) + '...' : 'None');
 
     const taskResponse = await fetch(`${BASE_URL}/higgsfield/text2image_soul`, {
       method: 'POST',
