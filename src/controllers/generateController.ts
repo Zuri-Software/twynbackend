@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { generateWithCharacter } from '../services/302aiService';
 import { uploadBuffer } from '../services/s3';
 import { incrementGenerationCount, logUserAction } from '../services/userService';
+import { query } from '../services/database';
 
 
 export async function handleGenerate(req: Request, res: Response) {
@@ -45,6 +46,21 @@ export async function handleGenerate(req: Request, res: Response) {
       prompt,
       style_id,
       higgsfield_id: higgsfield_id || null
+    });
+
+    // Create generation record in database
+    await createGenerationRecord({
+      generationId,
+      userId: req.user.id,
+      modelId: higgsfield_id || style_id,
+      higgsfield_id: higgsfield_id || null,
+      style_id,
+      prompt,
+      quality: quality as 'basic' | 'high',
+      aspect_ratio,
+      enhance_prompt,
+      negative_prompt,
+      seed
     });
 
     // Continue generation in background with push notification on completion
@@ -136,6 +152,9 @@ async function processGenerationWithNotification(params: {
       timestamp: new Date()
     });
 
+    // Update generation record with completed images
+    await completeGenerationRecord(params.generationId, s3Images);
+
     console.log(`[Generate Background] Completed generation ${params.generationId}`);
 
     // Send push notification to user with generated images
@@ -143,6 +162,9 @@ async function processGenerationWithNotification(params: {
 
   } catch (error) {
     console.error(`[Generate Background] Error in generation ${params.generationId}:`, error);
+    
+    // Mark generation as failed in database
+    await failGenerationRecord(params.generationId, error instanceof Error ? error.message : 'Unknown error');
     
     // Notify user of failure
     await sendGenerationFailedNotification(params.userId, params.generationId);
@@ -184,5 +206,88 @@ async function sendGenerationFailedNotification(userId: string, generationId: st
     console.log(`[Push] ✅ Sent generation failure notification to user ${userId}: Generation ${generationId}`);
   } catch (error) {
     console.error('Failed to send generation failure notification:', error);
+  }
+}
+
+// Database functions for generation tracking
+async function createGenerationRecord(params: {
+  generationId: string;
+  userId: string;
+  modelId: string;
+  higgsfield_id: string | null;
+  style_id: string;
+  prompt: string;
+  quality: 'basic' | 'high';
+  aspect_ratio: string;
+  enhance_prompt: boolean;
+  negative_prompt: string;
+  seed: number;
+}) {
+  try {
+    console.log(`[Database] Creating generation record: ${params.generationId}`);
+    
+    await query(
+      `INSERT INTO generations (
+        id, user_id, model_id, higgsfield_id, style_id, prompt, 
+        quality, aspect_ratio, seed, status, metadata, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())`,
+      [
+        params.generationId,
+        params.userId,
+        params.modelId,
+        params.higgsfield_id,
+        params.style_id,
+        params.prompt,
+        params.quality,
+        params.aspect_ratio,
+        params.seed,
+        'processing',
+        JSON.stringify({
+          enhance_prompt: params.enhance_prompt,
+          negative_prompt: params.negative_prompt
+        })
+      ]
+    );
+    
+    console.log(`[Database] ✅ Created generation record: ${params.generationId}`);
+  } catch (error) {
+    console.error(`[Database] ❌ Failed to create generation record: ${params.generationId}`, error);
+    throw error;
+  }
+}
+
+async function completeGenerationRecord(generationId: string, imageUrls: string[]) {
+  try {
+    console.log(`[Database] Completing generation record: ${generationId} with ${imageUrls.length} images`);
+    
+    await query(
+      `UPDATE generations 
+       SET status = 'completed', image_urls = $1, image_count = $2, completed_at = NOW()
+       WHERE id = $3`,
+      [imageUrls, imageUrls.length, generationId]
+    );
+    
+    console.log(`[Database] ✅ Completed generation record: ${generationId}`);
+  } catch (error) {
+    console.error(`[Database] ❌ Failed to complete generation record: ${generationId}`, error);
+    throw error;
+  }
+}
+
+async function failGenerationRecord(generationId: string, errorMessage: string) {
+  try {
+    console.log(`[Database] Marking generation as failed: ${generationId}`);
+    
+    await query(
+      `UPDATE generations 
+       SET status = 'failed', error_message = $1, completed_at = NOW()
+       WHERE id = $2`,
+      [errorMessage, generationId]
+    );
+    
+    console.log(`[Database] ✅ Marked generation as failed: ${generationId}`);
+  } catch (error) {
+    console.error(`[Database] ❌ Failed to mark generation as failed: ${generationId}`, error);
+    // Don't throw here to avoid disrupting error handling flow
   }
 }
