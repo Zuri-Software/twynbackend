@@ -3,7 +3,7 @@ import { generateWithCharacter } from '../services/302aiService';
 import { uploadBuffer } from '../services/s3';
 import { incrementGenerationCount, logUserAction } from '../services/userService';
 import { query } from '../services/database';
-import { v4 as uuidv4 } from 'uuid';
+const { v4: uuidv4 } = require('uuid');
 
 
 export async function handleGenerate(req: Request, res: Response) {
