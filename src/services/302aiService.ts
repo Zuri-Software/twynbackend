@@ -82,7 +82,7 @@ export async function generateWithCharacter(input: {
   enhance_prompt?: boolean;
   negative_prompt?: string;
   seed?: number;
-}): Promise<string[]> {
+}): Promise<{ imageUrls: string[], jobBatchId: string }> {
   try {
     // 1. Submit generation task
     const generatePayload = {
@@ -274,7 +274,7 @@ export async function pollAndUpdateModelTraining(
 }
 
 // Poll for generation results
-async function pollForResults(taskId: string): Promise<string[]> {
+async function pollForResults(taskId: string): Promise<{ imageUrls: string[], jobBatchId: string }> {
   const maxAttempts = 60; // 10 minutes max (10s intervals) - generation is faster than training
   let attempts = 0;
 
@@ -323,7 +323,10 @@ async function pollForResults(taskId: string): Promise<string[]> {
           }
 
           console.log(`Generation completed! Got ${imageUrls.length} images from ${completedJobs.length} jobs`);
-          return imageUrls;
+          return { 
+            imageUrls, 
+            jobBatchId: results.id || taskId // Use the batch ID from 302.AI response
+          };
         }
         
         // Check if any jobs failed

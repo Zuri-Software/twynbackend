@@ -104,7 +104,7 @@ async function processGenerationWithNotification(params: {
     console.log(`[Generate Background] Starting generation ${params.generationId}`);
 
     // Generate images using 302.AI
-    const imageUrls = await generateWithCharacter({
+    const generationResult = await generateWithCharacter({
       prompt: params.prompt,
       style_id: params.style_id,
       higgsfield_id: params.higgsfield_id,
@@ -115,7 +115,8 @@ async function processGenerationWithNotification(params: {
       seed: params.seed
     });
 
-    console.log(`[Generate Background] Got ${imageUrls.length} images from 302.AI for ${params.generationId}`);
+    const { imageUrls, jobBatchId } = generationResult;
+    console.log(`[Generate Background] Got ${imageUrls.length} images from 302.AI for ${params.generationId}, job batch: ${jobBatchId}`);
 
     // S3 folder structure - use style_id or higgsfield_id for organization
     const modelId = params.higgsfield_id || params.style_id;
@@ -153,8 +154,8 @@ async function processGenerationWithNotification(params: {
       timestamp: new Date()
     });
 
-    // Update generation record with completed images
-    await completeGenerationRecord(params.generationId, s3Images);
+    // Update generation record with completed images and job batch ID
+    await completeGenerationRecord(params.generationId, s3Images, jobBatchId);
 
     console.log(`[Generate Background] Completed generation ${params.generationId}`);
 
@@ -235,8 +236,8 @@ async function createGenerationRecord(params: {
       [
         params.generationId,
         params.userId,
-        params.modelId,
-        params.higgsfield_id,
+        params.modelId, // This is the character/model ID (or style_id if no character)
+        null, // higgsfield_id will be set when generation completes (job batch ID)
         params.style_id,
         params.prompt,
         params.quality,
@@ -245,7 +246,8 @@ async function createGenerationRecord(params: {
         'processing',
         JSON.stringify({
           enhance_prompt: params.enhance_prompt,
-          negative_prompt: params.negative_prompt
+          negative_prompt: params.negative_prompt,
+          character_higgsfield_id: params.higgsfield_id // Store character ID in metadata for reference
         })
       ]
     );
@@ -257,18 +259,18 @@ async function createGenerationRecord(params: {
   }
 }
 
-async function completeGenerationRecord(generationId: string, imageUrls: string[]) {
+async function completeGenerationRecord(generationId: string, imageUrls: string[], jobBatchId: string) {
   try {
-    console.log(`[Database] Completing generation record: ${generationId} with ${imageUrls.length} images`);
+    console.log(`[Database] Completing generation record: ${generationId} with ${imageUrls.length} images, job batch: ${jobBatchId}`);
     
     await query(
       `UPDATE generations 
-       SET status = 'completed', image_urls = $1, image_count = $2, completed_at = NOW()
-       WHERE id = $3`,
-      [imageUrls, imageUrls.length, generationId]
+       SET status = 'completed', image_urls = $1, image_count = $2, higgsfield_id = $3, completed_at = NOW()
+       WHERE id = $4`,
+      [imageUrls, imageUrls.length, jobBatchId, generationId]
     );
     
-    console.log(`[Database] ✅ Completed generation record: ${generationId}`);
+    console.log(`[Database] ✅ Completed generation record: ${generationId} with job batch ID: ${jobBatchId}`);
   } catch (error) {
     console.error(`[Database] ❌ Failed to complete generation record: ${generationId}`, error);
     throw error;
