@@ -36,7 +36,7 @@ export async function handleGenerate(req: Request, res: Response) {
     console.log(`[Generate] User ${req.user.id} generating with style: ${style_id}, character: ${higgsfield_id || 'none'}`);
 
     // Generate a unique generation ID for tracking (with random suffix to avoid collisions)
-    const generationId = `gen_${req.user.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const generationId = `gen_${req.user.id}_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 
     // Return immediately with generation started message
     res.json({
