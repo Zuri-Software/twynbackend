@@ -13,6 +13,15 @@ export async function sendPhoneOTP(req: Request, res: Response) {
     
     console.log(`[Auth] Sending OTP to phone: ${phone}`);
     
+    // TESTING BYPASS: Skip real OTP for test numbers starting with +1555
+    if (process.env.NODE_ENV === 'development' && phone.startsWith('+1555')) {
+      console.log(`[AUTH] 🧪 Development bypass - fake OTP sent to: ${phone}`);
+      return res.json({
+        success: true,
+        message: 'OTP sent successfully (bypassed for testing)'
+      });
+    }
+    
     const { data, error } = await supabase.auth.signInWithOtp({
       phone: phone,
     });
@@ -47,6 +56,45 @@ export async function verifyPhoneOTP(req: Request, res: Response) {
     }
     
     console.log(`[Auth] Verifying OTP for phone: ${phone}`);
+    
+    // TESTING BYPASS: Skip OTP verification for test numbers starting with +1555
+    if (process.env.NODE_ENV === 'development' && phone.startsWith('+1555')) {
+      console.log(`[AUTH] 🧪 Development bypass for test number: ${phone}`);
+
+      // Generate a mock user ID for test users (consistent based on phone number)
+      const mockUserId = `test-user-${phone.replace(/\D/g, '')}`; // Remove non-digits
+      
+      // Create or update user record in PostgreSQL database
+      const dbUser = await createUser({
+        id: mockUserId,
+        phone: phone,
+      });
+      
+      console.log(`[AUTH] 🧪 Test user created/found: ${dbUser.phone} (${mockUserId})`);
+      
+      // Generate mock session tokens for test users
+      const mockSession = {
+        access_token: `mock-access-token-${Date.now()}`,
+        refresh_token: `mock-refresh-token-${Date.now()}`,
+        expires_at: Math.floor(Date.now() / 1000) + (60 * 60), // 1 hour from now
+      };
+      
+      return res.json({
+        success: true,
+        user: {
+          id: mockUserId,
+          phone: dbUser.phone,
+          name: dbUser.name,
+          subscriptionTier: dbUser.subscription_tier,
+          modelCount: dbUser.model_count,
+          monthlyGenerations: dbUser.monthly_generations,
+          onboardingCompleted: dbUser.onboarding_completed,
+          createdAt: dbUser.created_at,
+          updatedAt: dbUser.updated_at,
+        },
+        session: mockSession
+      });
+    }
     
     const { data, error } = await supabase.auth.verifyOtp({
       phone: phone,
