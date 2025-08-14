@@ -61,8 +61,17 @@ export async function verifyPhoneOTP(req: Request, res: Response) {
     if (process.env.NODE_ENV === 'development' && phone.startsWith('+1555')) {
       console.log(`[AUTH] 🧪 Development bypass for test number: ${phone}`);
 
-      // Generate a mock user ID for test users (consistent based on phone number)
-      const mockUserId = `test-user-${phone.replace(/\D/g, '')}`; // Remove non-digits
+      // Generate a deterministic UUID for test users (consistent based on phone number)
+      const crypto = require('crypto');
+      const phoneDigits = phone.replace(/\D/g, '');
+      const hash = crypto.createHash('sha256').update(`test-user-${phoneDigits}`).digest('hex');
+      const mockUserId = [
+        hash.substring(0, 8),
+        hash.substring(8, 12),
+        hash.substring(12, 16),
+        hash.substring(16, 20),
+        hash.substring(20, 32)
+      ].join('-');
       
       // Create or update user record in PostgreSQL database
       const dbUser = await createUser({
