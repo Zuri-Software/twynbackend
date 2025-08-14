@@ -88,6 +88,11 @@ export async function verifyPhoneOTP(req: Request, res: Response) {
         expires_at: Math.floor(Date.now() / 1000) + (60 * 60), // 1 hour from now
       };
       
+      console.log(`[AUTH] 🧪 Generated mock session:`, {
+        access_token: mockSession.access_token.substring(0, 25) + '...',
+        refresh_token: mockSession.refresh_token.substring(0, 25) + '...'
+      });
+      
       return res.json({
         success: true,
         user: {
@@ -161,15 +166,25 @@ export async function verifyPhoneOTP(req: Request, res: Response) {
 // Refresh access token
 export async function refreshToken(req: Request, res: Response) {
   try {
-    const { refresh_token } = req.body;
+    console.log('[AUTH] 🔄 Refresh token request received:', {
+      body: req.body,
+      hasRefreshToken: !!req.body.refreshToken,
+      hasRefresh_token: !!req.body.refresh_token
+    });
     
-    if (!refresh_token) {
+    const { refreshToken, refresh_token } = req.body;
+    const token = refreshToken || refresh_token; // Support both field names
+    
+    if (!token) {
+      console.log('[AUTH] ❌ No refresh token provided');
       return res.status(400).json({ error: 'Refresh token is required' });
     }
     
+    console.log('[AUTH] 🔍 Processing token:', token.substring(0, 20) + '...');
+    
     // TESTING BYPASS: Handle mock refresh tokens for test users in development
-    if (process.env.NODE_ENV === 'development' && refresh_token.startsWith('mock-refresh-token-')) {
-      console.log(`[AUTH] 🧪 Development bypass for mock refresh token: ${refresh_token.substring(0, 25)}...`);
+    if (process.env.NODE_ENV === 'development' && token.startsWith('mock-refresh-token-')) {
+      console.log(`[AUTH] 🧪 Development bypass for mock refresh token: ${token.substring(0, 25)}...`);
       
       // Generate new mock tokens for test users
       const newMockSession = {
@@ -182,12 +197,11 @@ export async function refreshToken(req: Request, res: Response) {
         success: true,
         access_token: newMockSession.access_token,
         refresh_token: newMockSession.refresh_token,
-        expires_at: newMockSession.expires_at,
       });
     }
     
     const { data, error } = await supabase.auth.refreshSession({
-      refresh_token: refresh_token
+      refresh_token: token
     });
     
     if (error) {
@@ -197,11 +211,8 @@ export async function refreshToken(req: Request, res: Response) {
     
     res.json({
       success: true,
-      session: {
-        access_token: data.session?.access_token,
-        refresh_token: data.session?.refresh_token,
-        expires_at: data.session?.expires_at,
-      }
+      access_token: data.session?.access_token,
+      refresh_token: data.session?.refresh_token,
     });
     
   } catch (error) {

@@ -34,13 +34,12 @@ export async function authenticateUser(req: Request, res: Response, next: NextFu
     if (process.env.NODE_ENV === 'development' && token.startsWith('mock-access-token-')) {
       console.log(`[Auth] 🧪 Development bypass for mock token: ${token.substring(0, 25)}...`);
       
-      // Extract mock user ID from the token timestamp and find user by partial ID match
-      // For mock tokens, we need to find the test user in the database
-      // Since we can't derive the exact UUID from the token, we'll look for test users
+      // For mock tokens, we need to find the most recent test user in the database
+      // Since mock tokens don't contain user ID, we'll get the most recently created test user
       const { query } = require('../services/database');
       const result = await query(
-        `SELECT * FROM users WHERE id::text LIKE $1 ORDER BY created_at DESC LIMIT 1`,
-        ['%test-user%'] // This will match our test user UUID pattern
+        `SELECT * FROM users WHERE phone LIKE '+1555%' ORDER BY created_at DESC LIMIT 1`,
+        [] // Look for users with test phone numbers (+1555...)
       );
       
       if (result.rows.length === 0) {
