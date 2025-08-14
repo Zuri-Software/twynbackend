@@ -167,6 +167,25 @@ export async function refreshToken(req: Request, res: Response) {
       return res.status(400).json({ error: 'Refresh token is required' });
     }
     
+    // TESTING BYPASS: Handle mock refresh tokens for test users in development
+    if (process.env.NODE_ENV === 'development' && refresh_token.startsWith('mock-refresh-token-')) {
+      console.log(`[AUTH] 🧪 Development bypass for mock refresh token: ${refresh_token.substring(0, 25)}...`);
+      
+      // Generate new mock tokens for test users
+      const newMockSession = {
+        access_token: `mock-access-token-${Date.now()}`,
+        refresh_token: `mock-refresh-token-${Date.now()}`,
+        expires_at: Math.floor(Date.now() / 1000) + (60 * 60), // 1 hour from now
+      };
+      
+      return res.json({
+        success: true,
+        access_token: newMockSession.access_token,
+        refresh_token: newMockSession.refresh_token,
+        expires_at: newMockSession.expires_at,
+      });
+    }
+    
     const { data, error } = await supabase.auth.refreshSession({
       refresh_token: refresh_token
     });
