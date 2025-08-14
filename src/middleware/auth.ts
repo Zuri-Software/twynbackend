@@ -30,6 +30,39 @@ export async function authenticateUser(req: Request, res: Response, next: NextFu
     
     const token = authHeader.split(' ')[1];
     
+    // TESTING BYPASS: Handle mock tokens for test users in development
+    if (process.env.NODE_ENV === 'development' && token.startsWith('mock-access-token-')) {
+      console.log(`[Auth] 🧪 Development bypass for mock token: ${token.substring(0, 25)}...`);
+      
+      // Extract mock user ID from the token timestamp and find user by partial ID match
+      // For mock tokens, we need to find the test user in the database
+      // Since we can't derive the exact UUID from the token, we'll look for test users
+      const { query } = require('../services/database');
+      const result = await query(
+        `SELECT * FROM users WHERE id::text LIKE $1 ORDER BY created_at DESC LIMIT 1`,
+        ['%test-user%'] // This will match our test user UUID pattern
+      );
+      
+      if (result.rows.length === 0) {
+        return res.status(401).json({ error: 'Test user not found' });
+      }
+      
+      const dbUser = result.rows[0];
+      req.user = {
+        id: dbUser.id,
+        phone: dbUser.phone,
+        name: dbUser.name,
+        subscriptionTier: dbUser.subscription_tier,
+        modelCount: dbUser.model_count,
+        monthlyGenerations: dbUser.monthly_generations,
+        createdAt: dbUser.created_at,
+        updatedAt: dbUser.updated_at,
+      };
+      
+      console.log(`[Auth] 🧪 Mock authenticated user: ${req.user.phone} (${req.user.id})`);
+      return next();
+    }
+    
     // Verify JWT with Supabase
     const supabaseUser = await verifySupabaseToken(token);
     
