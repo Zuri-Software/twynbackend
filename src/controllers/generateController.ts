@@ -165,11 +165,24 @@ async function processGenerationWithNotification(params: {
   } catch (error) {
     console.error(`[Generate Background] Error in generation ${params.generationId}:`, error);
     
-    // Mark generation as failed in database
-    await failGenerationRecord(params.generationId, error instanceof Error ? error.message : 'Unknown error');
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     
-    // Notify user of failure
-    await sendGenerationFailedNotification(params.userId, params.generationId);
+    // Check if this is an NSFW content error
+    if (errorMessage === 'NSFW_CONTENT') {
+      console.log(`[Generate Background] Generation ${params.generationId} flagged as NSFW`);
+      
+      // Mark generation as nsfw in database
+      await markGenerationAsNSFW(params.generationId);
+      
+      // Send NSFW-specific notification
+      await sendGenerationNSFWNotification(params.userId, params.generationId);
+    } else {
+      // Mark generation as failed in database
+      await failGenerationRecord(params.generationId, errorMessage);
+      
+      // Notify user of failure
+      await sendGenerationFailedNotification(params.userId, params.generationId);
+    }
   }
 }
 
@@ -292,5 +305,40 @@ async function failGenerationRecord(generationId: string, errorMessage: string) 
   } catch (error) {
     console.error(`[Database] ❌ Failed to mark generation as failed: ${generationId}`, error);
     // Don't throw here to avoid disrupting error handling flow
+  }
+}
+
+async function markGenerationAsNSFW(generationId: string) {
+  try {
+    console.log(`[Database] Marking generation as NSFW: ${generationId}`);
+    
+    await query(
+      `UPDATE generations 
+       SET status = 'nsfw', error_message = $1, completed_at = NOW()
+       WHERE id = $2`,
+      ['Content flagged as inappropriate', generationId]
+    );
+    
+    console.log(`[Database] ✅ Marked generation as NSFW: ${generationId}`);
+  } catch (error) {
+    console.error(`[Database] ❌ Failed to mark generation as NSFW: ${generationId}`, error);
+    // Don't throw here to avoid disrupting error handling flow
+  }
+}
+
+async function sendGenerationNSFWNotification(userId: string, generationId: string) {
+  try {
+    const { pushNotificationService } = require('../services/pushNotificationService');
+    
+    await pushNotificationService.sendToUser(userId, {
+      title: "Content Not Allowed",
+      body: "Your image generation was flagged as inappropriate. Please try a different prompt.",
+      type: 'generation_nsfw',
+      data: { generationId }
+    });
+    
+    console.log(`[Push] ✅ Sent NSFW notification to user ${userId}: Generation ${generationId}`);
+  } catch (error) {
+    console.error('Failed to send NSFW notification:', error);
   }
 }

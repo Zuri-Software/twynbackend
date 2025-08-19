@@ -338,6 +338,13 @@ async function pollForResults(taskId: string): Promise<{ imageUrls: string[], jo
           const failedJob = failedJobs[0];
           throw new Error(`Generation failed: ${failedJob.error || 'Unknown error'}`);
         }
+
+        // Check if content was flagged as NSFW
+        const nsfwJobs = results.jobs.filter((job: any) => job.status === 'nsfw');
+        if (nsfwJobs.length > 0) {
+          console.log(`Generation flagged as NSFW: ${nsfwJobs.length} jobs flagged`);
+          throw new Error('NSFW_CONTENT');
+        }
       }
 
       // Task still in progress, wait and retry
