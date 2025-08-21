@@ -98,10 +98,27 @@ export async function generateWithCharacter(input: {
 
     // Add custom_reference_id if using trained character (302.AI parameter name)
     if (input.higgsfield_id) {
-      // Test: Try without character reference first to isolate the issue
-      console.log('[302.AI] ⚠️ DEBUG MODE: Skipping character reference to test base generation');
-      // (generatePayload as any).custom_reference_id = input.higgsfield_id;
-      // (generatePayload as any).custom_reference_strength = 0.8;
+      console.log('[302.AI] Validating character ID:', input.higgsfield_id);
+      
+      // Try to validate the character ID first
+      try {
+        const isValid = await validateCharacterId(input.higgsfield_id);
+        if (!isValid) {
+          console.error('[302.AI] ❌ Character ID appears to be invalid or expired:', input.higgsfield_id);
+          
+          // Mark the model as expired in the database
+          await markModelAsExpired(input.higgsfield_id);
+          
+          throw new Error(`Character ID ${input.higgsfield_id} is invalid or expired. Please retrain your model.`);
+        }
+        console.log('[302.AI] ✅ Character ID validated successfully');
+        
+        (generatePayload as any).custom_reference_id = input.higgsfield_id;
+        (generatePayload as any).custom_reference_strength = 0.8;
+      } catch (validationError) {
+        console.error('[302.AI] Character ID validation failed:', validationError);
+        throw validationError;
+      }
     }
 
     // Validate critical parameters before sending
@@ -406,6 +423,55 @@ export async function getTrainingStatus(taskId: string) {
   } catch (error) {
     console.error('Error checking training status:', error);
     throw error;
+  }
+}
+
+// Mark a model as expired when its character ID is no longer valid
+async function markModelAsExpired(higgsfield_id: string): Promise<void> {
+  try {
+    const { query } = await import('./database');
+    
+    // Use 'failed' status since 'expired' might not be in the constraint yet
+    await query(
+      `UPDATE models 
+       SET status = 'failed', updated_at = NOW() 
+       WHERE higgsfield_id = $1`,
+      [higgsfield_id]
+    );
+    
+    console.log(`[302.AI] Marked model with higgsfield_id ${higgsfield_id} as expired`);
+  } catch (error) {
+    console.error(`[302.AI] Failed to mark model as expired:`, error);
+  }
+}
+
+// Validate if a character ID is still valid in 302.AI
+async function validateCharacterId(characterId: string): Promise<boolean> {
+  try {
+    console.log(`[302.AI] Validating character ID: ${characterId}`);
+    
+    // Try to fetch the character task status
+    const response = await fetch(`${BASE_URL}/higgsfield/task/${characterId}/fetch`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${API_KEY}`
+      }
+    });
+    
+    if (!response.ok) {
+      console.log(`[302.AI] Character validation failed with HTTP ${response.status}`);
+      return false;
+    }
+    
+    const result = await response.json();
+    console.log(`[302.AI] Character validation response:`, result);
+    
+    // Character is valid if it exists and is completed
+    return result.status === 'completed';
+    
+  } catch (error) {
+    console.error(`[302.AI] Character validation error:`, error);
+    return false;
   }
 }
 
