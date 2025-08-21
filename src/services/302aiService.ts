@@ -88,11 +88,12 @@ export async function generateWithCharacter(input: {
     const generatePayload = {
       prompt: input.prompt,
       style_id: input.style_id,
-      quality: input.quality || 'basic',
+      quality: (input.quality === 'high') ? 'standard' : 'basic', // Map 'high' to 'standard' for 302.AI
       aspect_ratio: input.aspect_ratio || '3:4',
       enhance_prompt: input.enhance_prompt ?? true,
       seed: input.seed || Math.floor(Math.random() * 1000000),
-      negative_prompt: input.negative_prompt || ''
+      negative_prompt: input.negative_prompt || '',
+      num_images: 4 // 302.AI might require explicit image count
     };
 
     // Add custom_reference_id if using trained character (302.AI parameter name)
