@@ -98,9 +98,20 @@ export async function generateWithCharacter(input: {
 
     // Add custom_reference_id if using trained character (302.AI parameter name)
     if (input.higgsfield_id) {
-      (generatePayload as any).custom_reference_id = input.higgsfield_id;
+      // Test: Try without character reference first to isolate the issue
+      console.log('[302.AI] ⚠️ DEBUG MODE: Skipping character reference to test base generation');
+      // (generatePayload as any).custom_reference_id = input.higgsfield_id;
+      // (generatePayload as any).custom_reference_strength = 0.8;
     }
 
+    // Validate critical parameters before sending
+    console.log('[302.AI] Validating parameters...');
+    console.log('[302.AI] - style_id format:', input.style_id, 'length:', input.style_id?.length);
+    console.log('[302.AI] - higgsfield_id format:', input.higgsfield_id, 'length:', input.higgsfield_id?.length);
+    console.log('[302.AI] - prompt length:', input.prompt?.length);
+    console.log('[302.AI] - quality value:', generatePayload.quality);
+    console.log('[302.AI] - aspect_ratio value:', generatePayload.aspect_ratio);
+    
     console.log('Submitting generation task to 302.AI:', generatePayload);
     console.log('API URL:', `${BASE_URL}/higgsfield/text2image_soul`);
     console.log('API Key present:', !!API_KEY);
