@@ -1,4 +1,5 @@
 import { getActiveDeviceTokens } from './userService';
+const apnsService = require('./apns-service');
 
 // APNs payload structure
 interface ApnsPayload {
@@ -24,7 +25,6 @@ export interface NotificationMessage {
 
 export class PushNotificationService {
   private static instance: PushNotificationService;
-  private apnProvider: any;
   
   public static getInstance(): PushNotificationService {
     if (!PushNotificationService.instance) {
@@ -34,41 +34,7 @@ export class PushNotificationService {
   }
 
   private constructor() {
-    this.initializeAPNs();
-  }
-
-  private async initializeAPNs() {
-    try {
-      // Check if we have APNs credentials configured
-      const apnKeyId = process.env.APN_KEY_ID;
-      const apnTeamId = process.env.APN_TEAM_ID;
-      const apnKeyPath = process.env.APN_KEY_PATH;
-      const apnBundleId = process.env.APN_BUNDLE_ID;
-
-      if (!apnKeyId || !apnTeamId || !apnKeyPath || !apnBundleId) {
-        console.log('[Push] ⚠️ APNs credentials not configured. Push notifications will be logged only.');
-        console.log('[Push] Required env vars: APN_KEY_ID, APN_TEAM_ID, APN_KEY_PATH, APN_BUNDLE_ID');
-        return;
-      }
-
-      // Import node-apn only if credentials are available
-      const apn = require('node-apn');
-      
-      const options = {
-        token: {
-          key: apnKeyPath,
-          keyId: apnKeyId,
-          teamId: apnTeamId,
-        },
-        production: process.env.NODE_ENV === 'production',
-      };
-
-      this.apnProvider = new apn.Provider(options);
-      console.log(`[Push] ✅ APNs initialized for ${process.env.NODE_ENV === 'production' ? 'production' : 'development'}`);
-    } catch (error) {
-      console.error('[Push] ❌ Failed to initialize APNs:', error);
-      console.log('[Push] Push notifications will be logged only');
-    }
+    console.log('[Push] ✅ PushNotificationService initialized with APNs integration');
   }
 
   async sendToUser(userId: string, message: NotificationMessage): Promise<void> {
@@ -100,42 +66,25 @@ export class PushNotificationService {
 
   private async sendToiOS(deviceToken: string, message: NotificationMessage): Promise<void> {
     try {
-      if (!this.apnProvider) {
-        console.log(`[Push] [iOS] Would send to device ${deviceToken.substring(0, 10)}...: ${message.title} - ${message.body}`);
-        return;
-      }
-
-      const apn = require('node-apn');
-      const notification = new apn.Notification();
-      
-      notification.alert = {
+      // Use our integrated APNs service
+      const payload = {
         title: message.title,
         body: message.body,
-      };
-      notification.badge = 1;
-      notification.sound = 'default';
-      notification.topic = process.env.APN_BUNDLE_ID;
-      
-      // Add custom data
-      if (message.type) {
-        notification.payload.type = message.type;
-      }
-      if (message.data) {
-        Object.assign(notification.payload, message.data);
-      }
-
-      const result = await this.apnProvider.send(notification, deviceToken);
-      
-      if (result.sent.length > 0) {
-        console.log(`[Push] [iOS] ✅ Sent to device ${deviceToken.substring(0, 10)}...`);
-      } else {
-        console.log(`[Push] [iOS] ❌ Failed to send to device ${deviceToken.substring(0, 10)}...`);
-        if (result.failed.length > 0) {
-          console.log(`[Push] [iOS] Error:`, result.failed[0].error);
+        data: {
+          ...message.data,
+          type: message.type
         }
+      };
+
+      const result = await apnsService.sendNotification(deviceToken, payload);
+      
+      if (result.success) {
+        console.log(`[Push] [iOS] ✅ Sent via APNs service to device ${deviceToken.substring(0, 10)}...`);
+      } else {
+        console.log(`[Push] [iOS] ❌ APNs service failed for device ${deviceToken.substring(0, 10)}...: ${result.error}`);
       }
     } catch (error) {
-      console.error(`[Push] [iOS] ❌ Error sending to device ${deviceToken.substring(0, 10)}...:`, error);
+      console.error(`[Push] [iOS] ❌ Error sending via APNs service to device ${deviceToken.substring(0, 10)}...:`, error);
     }
   }
 
@@ -146,9 +95,50 @@ export class PushNotificationService {
   }
 
   async shutdown(): Promise<void> {
-    if (this.apnProvider) {
-      this.apnProvider.shutdown();
-      console.log('[Push] APNs provider shut down');
+    apnsService.shutdown();
+    console.log('[Push] APNs service shut down');
+  }
+
+  // Convenient methods for specific notification types
+  async sendTrainingCompletedNotification(userId: string, modelData: { modelId: string, modelName: string }): Promise<void> {
+    try {
+      const deviceTokens = await getActiveDeviceTokens(userId);
+      
+      for (const device of deviceTokens) {
+        if (device.platform === 'ios') {
+          await apnsService.sendTrainingCompletedNotification(device.token, modelData);
+        }
+      }
+    } catch (error) {
+      console.error(`[Push] ❌ Failed to send training completed notification to user ${userId}:`, error);
+    }
+  }
+
+  async sendGenerationCompletedNotification(userId: string, generationData: { generationId: string, imageCount: number, presetName: string }): Promise<void> {
+    try {
+      const deviceTokens = await getActiveDeviceTokens(userId);
+      
+      for (const device of deviceTokens) {
+        if (device.platform === 'ios') {
+          await apnsService.sendGenerationCompletedNotification(device.token, generationData);
+        }
+      }
+    } catch (error) {
+      console.error(`[Push] ❌ Failed to send generation completed notification to user ${userId}:`, error);
+    }
+  }
+
+  async sendGenerationFailedNotification(userId: string, errorData: { generationId: string, errorMessage: string }): Promise<void> {
+    try {
+      const deviceTokens = await getActiveDeviceTokens(userId);
+      
+      for (const device of deviceTokens) {
+        if (device.platform === 'ios') {
+          await apnsService.sendGenerationFailedNotification(device.token, errorData);
+        }
+      }
+    } catch (error) {
+      console.error(`[Push] ❌ Failed to send generation failed notification to user ${userId}:`, error);
     }
   }
 }
