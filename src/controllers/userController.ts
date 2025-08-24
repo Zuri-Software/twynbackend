@@ -238,3 +238,24 @@ export async function registerDeviceTokenController(req: Request, res: Response)
     res.status(500).json({ error: 'Failed to register device token' });
   }
 }
+
+// Check if user has active device token
+export async function checkDeviceTokenStatusController(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+    
+    const { hasActiveDeviceToken } = require('../services/userService');
+    const hasToken = await hasActiveDeviceToken(req.user.id);
+    
+    console.log(`[UserController] Device token status for user ${req.user.id}: ${hasToken ? 'exists' : 'missing'}`);
+    
+    res.json({ 
+      hasDeviceToken: hasToken
+    });
+  } catch (error) {
+    console.error('Error checking device token status:', error);
+    res.status(500).json({ error: 'Failed to check device token status' });
+  }
+}

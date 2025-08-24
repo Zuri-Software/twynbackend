@@ -6,7 +6,8 @@ import {
   getUserModelsController,
   upgradeUser,
   completeOnboarding,
-  registerDeviceTokenController
+  registerDeviceTokenController,
+  checkDeviceTokenStatusController
 } from '../controllers/userController';
 import { authenticateUser } from '../middleware/auth';
 import { checkUsageLimits } from '../middleware/usageLimits';
@@ -36,5 +37,8 @@ router.post('/complete-onboarding', completeOnboarding);
 
 // POST /api/users/register-device - Register device token for push notifications
 router.post('/register-device', registerDeviceTokenController);
+
+// GET /api/users/device-token-status - Check if user has active device token
+router.get('/device-token-status', checkDeviceTokenStatusController);
 
 export default router;

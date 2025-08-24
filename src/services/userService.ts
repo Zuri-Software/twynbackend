@@ -204,6 +204,21 @@ export async function logUserAction(userId: string, action: 'generate' | 'train'
 
 // MARK: - Device Token Management
 
+// Check if user has any active device tokens (check first in the flow!)
+export async function hasActiveDeviceToken(userId: string): Promise<boolean> {
+  console.log(`[UserService] Checking if user ${userId} has active device tokens`);
+  
+  const result = await query(
+    'SELECT COUNT(*) as count FROM device_tokens WHERE user_id = $1 AND is_active = true',
+    [userId]
+  );
+  
+  const count = parseInt(result.rows[0].count);
+  console.log(`[UserService] User ${userId} has ${count} active device token(s)`);
+  
+  return count > 0;
+}
+
 export async function registerDeviceToken(userId: string, deviceToken: string, platform: 'ios' | 'android'): Promise<void> {
   console.log(`[UserService] Registering device token for user ${userId}, platform: ${platform}`);
   
@@ -233,3 +248,4 @@ export async function deactivateDeviceToken(userId: string, deviceToken: string)
     [userId, deviceToken]
   );
 }
+
