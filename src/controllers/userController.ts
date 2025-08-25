@@ -121,6 +121,11 @@ export async function getUserModelsController(req: Request, res: Response) {
     
     const models = await getUserModels(req.user.id);
     
+    // Debug: Log the first model to see what data we're returning
+    if (models.length > 0) {
+      console.log('[UserController] Sample model data:', JSON.stringify(models[0], null, 2));
+    }
+    
     res.json({ 
       models,
       count: models.length,
