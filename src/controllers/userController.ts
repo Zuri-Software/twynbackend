@@ -221,8 +221,8 @@ export async function registerDeviceTokenController(req: Request, res: Response)
       return res.status(400).json({ error: 'Missing required field: deviceToken' });
     }
     
-    if (!platform || !['ios', 'android'].includes(platform)) {
-      return res.status(400).json({ error: 'Missing or invalid platform field. Must be "ios" or "android"' });
+    if (!platform || !['ios', 'android', 'expo'].includes(platform)) {
+      return res.status(400).json({ error: 'Missing or invalid platform field. Must be "ios", "android", or "expo"' });
     }
     
     await registerDeviceToken(req.user.id, deviceToken, platform);

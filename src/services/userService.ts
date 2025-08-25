@@ -219,7 +219,7 @@ export async function hasActiveDeviceToken(userId: string): Promise<boolean> {
   return count > 0;
 }
 
-export async function registerDeviceToken(userId: string, deviceToken: string, platform: 'ios' | 'android'): Promise<void> {
+export async function registerDeviceToken(userId: string, deviceToken: string, platform: 'ios' | 'android' | 'expo'): Promise<void> {
   console.log(`[UserService] Registering device token for user ${userId}, platform: ${platform}`);
   
   await query(

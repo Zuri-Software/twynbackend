@@ -1,5 +1,6 @@
 import { getActiveDeviceTokens } from './userService';
 const apnsService = require('./apns-service');
+const expoPushService = require('./expo-push-service');
 
 // APNs payload structure
 interface ApnsPayload {
@@ -53,7 +54,10 @@ export class PushNotificationService {
 
       // Send to each device
       for (const device of deviceTokens) {
-        if (device.platform === 'ios') {
+        // Check if it's an Expo token first
+        if (expoPushService.isExpoToken(device.token)) {
+          await this.sendToExpo(device.token, message);
+        } else if (device.platform === 'ios') {
           await this.sendToiOS(device.token, message);
         } else if (device.platform === 'android') {
           await this.sendToAndroid(device.token, message);
@@ -61,6 +65,30 @@ export class PushNotificationService {
       }
     } catch (error) {
       console.error(`[Push] ❌ Failed to send notification to user ${userId}:`, error);
+    }
+  }
+
+  private async sendToExpo(deviceToken: string, message: NotificationMessage): Promise<void> {
+    try {
+      // Use Expo push service for Expo tokens
+      const payload = {
+        title: message.title,
+        body: message.body,
+        data: {
+          ...message.data,
+          type: message.type
+        }
+      };
+
+      const result = await expoPushService.sendNotification(deviceToken, payload);
+      
+      if (result.success) {
+        console.log(`[Push] [Expo] ✅ Sent via Expo service to device ${deviceToken.substring(0, 30)}...`);
+      } else {
+        console.log(`[Push] [Expo] ❌ Expo service failed for device ${deviceToken.substring(0, 30)}...: ${result.error}`);
+      }
+    } catch (error) {
+      console.error(`[Push] [Expo] ❌ Error sending via Expo service to device ${deviceToken.substring(0, 30)}...:`, error);
     }
   }
 
@@ -105,7 +133,9 @@ export class PushNotificationService {
       const deviceTokens = await getActiveDeviceTokens(userId);
       
       for (const device of deviceTokens) {
-        if (device.platform === 'ios') {
+        if (expoPushService.isExpoToken(device.token)) {
+          await expoPushService.sendTrainingCompletedNotification(device.token, modelData);
+        } else if (device.platform === 'ios') {
           await apnsService.sendTrainingCompletedNotification(device.token, modelData);
         }
       }
@@ -119,7 +149,9 @@ export class PushNotificationService {
       const deviceTokens = await getActiveDeviceTokens(userId);
       
       for (const device of deviceTokens) {
-        if (device.platform === 'ios') {
+        if (expoPushService.isExpoToken(device.token)) {
+          await expoPushService.sendGenerationCompletedNotification(device.token, generationData);
+        } else if (device.platform === 'ios') {
           await apnsService.sendGenerationCompletedNotification(device.token, generationData);
         }
       }
@@ -133,7 +165,9 @@ export class PushNotificationService {
       const deviceTokens = await getActiveDeviceTokens(userId);
       
       for (const device of deviceTokens) {
-        if (device.platform === 'ios') {
+        if (expoPushService.isExpoToken(device.token)) {
+          await expoPushService.sendGenerationFailedNotification(device.token, errorData);
+        } else if (device.platform === 'ios') {
           await apnsService.sendGenerationFailedNotification(device.token, errorData);
         }
       }

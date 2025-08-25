@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS device_tokens (
     id SERIAL PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     device_token VARCHAR(255) NOT NULL,
-    platform VARCHAR(10) NOT NULL CHECK (platform IN ('ios', 'android')),
+    platform VARCHAR(10) NOT NULL CHECK (platform IN ('ios', 'android', 'expo')),
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
