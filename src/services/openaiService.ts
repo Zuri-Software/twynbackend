@@ -11,32 +11,14 @@ const openai = new OpenAI({
 
 // Configuration for Vision API
 const VISION_CONFIG = {
-  model: 'gpt-4-vision-preview', // Try different vision model
+  model: 'gpt-4o-mini', // Use correct modern vision model
   maxTokens: 300,
   temperature: 0.8,
   timeout: 10000, // 10 seconds
 };
 
 // Master prompt template for avatar generation
-const MASTER_PROMPT = `
-Create a detailed artistic prompt for AI image generation based on the style, composition, and aesthetic elements you observe in this image.
-
-Focus on:
-- Visual style and artistic elements
-- Color palette and lighting
-- Composition and framing
-- Mood and atmosphere
-- Fashion/style elements (clothing, accessories)
-- Environmental details
-
-Describe what you see in terms that would help create a similar artistic style, without identifying specific individuals.
-
-Create a prompt that captures the artistic essence for generating similar imagery.
-
-Format your response as a detailed prompt suitable for AI image generation, focusing on style, mood, and visual elements rather than specific people.
-
-Keep your response between 100-200 words.
-`;
+const MASTER_PROMPT = `Describe the visual style, colors, lighting, and composition of this image in 100-150 words. Focus on artistic elements that could be used to create similar imagery.`;
 
 export interface AnalysisResult {
   prompt: string;
