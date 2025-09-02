@@ -56,13 +56,13 @@ export async function captureAndAnalyze(req: Request, res: Response) {
       filename: req.file.originalname,
     });
 
-    // Generate unique ID for this capture
-    const captureId = uuidv4();
+    // Generate unique ID for this new capture
+    const newCaptureId = uuidv4();
     
     try {
       // Step 1: Upload photo to S3
       console.log('[Camera Controller] ☁️ Uploading photo to S3...');
-      const s3Key = `users/${userId}/camera-captures/${captureId}.jpg`;
+      const s3Key = `users/${userId}/camera-captures/${newCaptureId}.jpg`;
       const captureUrl = await uploadBuffer(req.file.buffer, s3Key, 'image/jpeg');
       console.log('[Camera Controller] ✅ Photo uploaded to S3:', captureUrl);
 
@@ -79,7 +79,7 @@ export async function captureAndAnalyze(req: Request, res: Response) {
       `;
       
       const captureResult = await query(captureQuery, [
-        captureId,
+        newCaptureId,
         userId,
         captureUrl,
         analysisResult.prompt,
@@ -90,7 +90,7 @@ export async function captureAndAnalyze(req: Request, res: Response) {
       console.log('[Camera Controller] 💾 Capture record saved to database');
 
       // Step 4: Log user action (use 'upload' temporarily until migration is run)
-      await logUserAction(userId, 'upload', 1, { captureId });
+      await logUserAction(userId, 'upload', 1, { captureId: newCaptureId });
 
       // Step 5: Optionally start generation immediately
       let generationId: string | undefined;
@@ -105,7 +105,7 @@ export async function captureAndAnalyze(req: Request, res: Response) {
           
           // Start the generation (this will be async)
           // We'll return immediately with the generation ID
-          startCameraGeneration(userId, captureId, generationId, modelId, styleId, analysisResult.prompt, quality, aspectRatio);
+          startCameraGeneration(userId, newCaptureId, generationId, modelId, styleId, analysisResult.prompt, quality, aspectRatio);
           
           estimatedTime = 60; // Estimated 60 seconds for generation
           console.log('[Camera Controller] 🎯 Generation started:', generationId);
@@ -120,7 +120,7 @@ export async function captureAndAnalyze(req: Request, res: Response) {
       const responseData = {
         success: true,
         data: {
-          captureId,
+          captureId: newCaptureId,
           prompt: analysisResult.prompt,
           generationId,
           estimatedTime,
