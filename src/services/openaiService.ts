@@ -96,6 +96,13 @@ export async function analyzeImageForAvatar(
     
     const startTime = Date.now();
     
+    console.log('[OpenAI Service] 📋 Sending request with:', {
+      model: VISION_CONFIG.model,
+      imageDetail,
+      promptLength: MASTER_PROMPT.length,
+      imageUrlPrefix: imageUrl.substring(0, 50) + '...',
+    });
+
     const response = await openai.chat.completions.create({
       model: VISION_CONFIG.model,
       max_tokens: VISION_CONFIG.maxTokens,
@@ -118,6 +125,12 @@ export async function analyzeImageForAvatar(
           ],
         },
       ],
+    });
+
+    console.log('[OpenAI Service] 📊 Response details:', {
+      finishReason: response.choices[0]?.finish_reason,
+      responseLength: response.choices[0]?.message?.content?.length,
+      usage: response.usage,
     });
 
     const analysisTime = Date.now() - startTime;
