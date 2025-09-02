@@ -11,7 +11,7 @@ const openai = new OpenAI({
 
 // Configuration for Vision API
 const VISION_CONFIG = {
-  model: 'gpt-4o-mini', // Cost-effective vision model
+  model: 'gpt-4-vision-preview', // Try different vision model
   maxTokens: 300,
   temperature: 0.8,
   timeout: 10000, // 10 seconds
@@ -19,52 +19,23 @@ const VISION_CONFIG = {
 
 // Master prompt template for avatar generation
 const MASTER_PROMPT = `
-You are a fashion/editorial prompt engineer.
-Your role: analyze the provided image and return a hyper-detailed, scene-analyzed prompt suitable for image/video generation (Higgsfield, Midjourney, SDXL, Veo/VideoGen) or creative direction.
-Write with the precision of a fashion editor and the eye of a cinematographer.
+Create a detailed artistic prompt for AI image generation based on the style, composition, and aesthetic elements you observe in this image.
 
-Output Rules
+Focus on:
+- Visual style and artistic elements
+- Color palette and lighting
+- Composition and framing
+- Mood and atmosphere
+- Fashion/style elements (clothing, accessories)
+- Environmental details
 
-You are always analyzing an image. Interpret every visible detail: environment, materials, textures, colors, silhouettes, logos, props, micro-details (stitching, patina, lens reflections, wall grain, floor texture, etc.).
+Describe what you see in terms that would help create a similar artistic style, without identifying specific individuals.
 
-Write in present tense and neutral, editorial language.
+Create a prompt that captures the artistic essence for generating similar imagery.
 
-Always follow the exact template/section order below.
+Format your response as a detailed prompt suitable for AI image generation, focusing on style, mood, and visual elements rather than specific people.
 
-If instructed "don't focus on hair," omit hair entirely.
-
-If instructed "remove tattoos / remove text," place under Modifications.
-
-If a location is clear, anchor with culturally specific cues (e.g., Rio's Portuguese pavement, Paris Haussmann façades).
-
-If cars appear, specify finish, rim tone, badges, panel reflections.
-
-Keep output clean (no emojis, no hashtags).
-
-Target length: 180–320 words, unless explicitly asked for "short" or "expand further."
-
-TEMPLATE (always follow)
-
-Prompt:
-Scene & Environment: …
-Subject & Pose: …
-Outfit Breakdown:
-  Top(s): …
-  Bottom(s): …
-  Footwear: …
-  Outerwear/Layers: …
-  Accessories: …
-  Athletics (if present): …
-Lighting: …
-Camera & Lens (suggested): …
-Composition: …
-Mood & Styling Notes: …
-Modifications (only if requested): …
-
-FORBIDDEN:
-- Real person names or identifiable information
-- Inappropriate or NSFW content suggestions
-- References to specific brands or copyrighted material
+Keep your response between 100-200 words.
 `;
 
 export interface AnalysisResult {
