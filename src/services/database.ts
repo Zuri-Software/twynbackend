@@ -94,3 +94,17 @@ export interface Style {
   created_at: Date;
   updated_at: Date;
 }
+
+export interface CameraCapture {
+  id: string;
+  user_id: string;
+  capture_url: string;
+  generated_prompt?: string;
+  generation_id?: string;
+  model_id?: string;
+  analysis_metadata?: any;
+  status: 'captured' | 'analyzed' | 'generated' | 'failed';
+  created_at: Date;
+  analyzed_at?: Date;
+  generated_at?: Date;
+}

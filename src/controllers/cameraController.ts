@@ -1,0 +1,311 @@
+import { Request, Response } from 'express';
+import { v4 as uuidv4 } from 'uuid';
+import { analyzeImageForAvatar } from '../services/openaiService';
+import { uploadBuffer } from '../services/s3';
+import { query } from '../services/database';
+import { logUserAction } from '../services/userService';
+import { generateWithCharacter } from '../services/302aiService';
+import multer from 'multer';
+
+// Configure multer for image uploads (in memory)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    // Only allow image files
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'));
+    }
+  },
+});
+
+export const uploadMiddleware = upload.single('photo');
+
+/**
+ * Capture and analyze photo for avatar generation
+ * POST /api/camera/capture
+ */
+export async function captureAndAnalyze(req: Request, res: Response) {
+  try {
+    console.log('[Camera Controller] 📸 Processing camera capture request');
+    
+    const { modelId, styleId, quality = 'basic', aspectRatio = '1:1', generateImmediately = false } = req.body;
+    const userId = req.user!.id;
+    
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'No photo provided. Please capture or select a photo.',
+      });
+    }
+
+    console.log('[Camera Controller] 📁 Received photo:', {
+      size: req.file.size,
+      mimetype: req.file.mimetype,
+      filename: req.file.originalname,
+    });
+
+    // Generate unique ID for this capture
+    const captureId = uuidv4();
+    
+    try {
+      // Step 1: Upload photo to S3
+      console.log('[Camera Controller] ☁️ Uploading photo to S3...');
+      const s3Key = `users/${userId}/camera-captures/${captureId}.jpg`;
+      const captureUrl = await uploadBuffer(req.file.buffer, s3Key, 'image/jpeg');
+      console.log('[Camera Controller] ✅ Photo uploaded to S3:', captureUrl);
+
+      // Step 2: Analyze image with OpenAI
+      console.log('[Camera Controller] 🔍 Analyzing image with OpenAI...');
+      const analysisResult = await analyzeImageForAvatar(req.file.buffer);
+      console.log('[Camera Controller] ✅ Image analysis complete');
+
+      // Step 3: Store capture record in database
+      const captureQuery = `
+        INSERT INTO camera_captures (id, user_id, capture_url, generated_prompt, analysis_metadata, status, analyzed_at)
+        VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        RETURNING *
+      `;
+      
+      const captureResult = await query(captureQuery, [
+        captureId,
+        userId,
+        captureUrl,
+        analysisResult.prompt,
+        JSON.stringify(analysisResult.metadata || {}),
+        'analyzed'
+      ]);
+
+      console.log('[Camera Controller] 💾 Capture record saved to database');
+
+      // Step 4: Log user action (use 'upload' temporarily until migration is run)
+      await logUserAction(userId, 'upload', 1, { captureId });
+
+      // Step 5: Optionally start generation immediately
+      let generationId: string | undefined;
+      let estimatedTime: number | undefined;
+
+      if (generateImmediately && modelId) {
+        try {
+          console.log('[Camera Controller] 🚀 Starting immediate generation...');
+          
+          // Create generation ID
+          generationId = `gen_${userId}_${Date.now()}`;
+          
+          // Start the generation (this will be async)
+          // We'll return immediately with the generation ID
+          startCameraGeneration(userId, captureId, generationId, modelId, styleId, analysisResult.prompt, quality, aspectRatio);
+          
+          estimatedTime = 60; // Estimated 60 seconds for generation
+          console.log('[Camera Controller] 🎯 Generation started:', generationId);
+          
+        } catch (genError) {
+          console.error('[Camera Controller] ❌ Failed to start generation:', genError);
+          // Don't fail the whole request if generation fails
+        }
+      }
+
+      // Return success response
+      res.json({
+        success: true,
+        data: {
+          captureId,
+          prompt: analysisResult.prompt,
+          generationId,
+          estimatedTime,
+          metadata: analysisResult.metadata,
+        },
+      });
+
+    } catch (processingError) {
+      console.error('[Camera Controller] ❌ Processing error:', processingError);
+      
+      // Return appropriate error messages
+      if (processingError instanceof Error) {
+        if (processingError.message.includes('content policy') || processingError.message.includes('cannot be used')) {
+          return res.status(400).json({
+            success: false,
+            error: 'This photo cannot be used for avatar generation. Please try a different photo.',
+            code: 'CONTENT_RESTRICTED',
+          });
+        } else if (processingError.message.includes('rate limit') || processingError.message.includes('busy')) {
+          return res.status(429).json({
+            success: false,
+            error: 'Service is currently busy. Please try again in a few minutes.',
+            code: 'RATE_LIMITED',
+          });
+        }
+      }
+      
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to analyze photo. Please try again.',
+        code: 'ANALYSIS_FAILED',
+      });
+    }
+
+  } catch (error) {
+    console.error('[Camera Controller] ❌ Capture request failed:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to process camera capture. Please try again.',
+      code: 'CAPTURE_FAILED',
+    });
+  }
+}
+
+/**
+ * Analyze photo only (without generation)
+ * POST /api/camera/analyze
+ */
+export async function analyzePhoto(req: Request, res: Response) {
+  try {
+    console.log('[Camera Controller] 🔍 Processing analyze-only request');
+    
+    const { analysisType = 'standard' } = req.body;
+    
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'No photo provided',
+      });
+    }
+
+    // Analyze image with OpenAI
+    const analysisResult = await analyzeImageForAvatar(
+      req.file.buffer, 
+      analysisType as 'standard' | 'detailed'
+    );
+
+    res.json({
+      success: true,
+      data: {
+        prompt: analysisResult.prompt,
+        metadata: analysisResult.metadata,
+      },
+    });
+
+  } catch (error) {
+    console.error('[Camera Controller] ❌ Analysis request failed:', error);
+    
+    if (error instanceof Error && error.message.includes('content policy')) {
+      return res.status(400).json({
+        success: false,
+        error: 'This photo cannot be analyzed for avatar generation.',
+        code: 'CONTENT_RESTRICTED',
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      error: 'Failed to analyze photo. Please try again.',
+      code: 'ANALYSIS_FAILED',
+    });
+  }
+}
+
+/**
+ * Get user's camera capture history
+ * GET /api/camera/captures
+ */
+export async function getCaptureHistory(req: Request, res: Response) {
+  try {
+    const userId = req.user!.id;
+    const { limit = 20, offset = 0 } = req.query;
+
+    const capturesQuery = `
+      SELECT 
+        cc.*,
+        g.status as generation_status,
+        g.image_urls as generated_images
+      FROM camera_captures cc
+      LEFT JOIN generations g ON cc.generation_id = g.id
+      WHERE cc.user_id = $1
+      ORDER BY cc.created_at DESC
+      LIMIT $2 OFFSET $3
+    `;
+
+    const result = await query(capturesQuery, [userId, limit, offset]);
+
+    res.json({
+      success: true,
+      data: result.rows,
+    });
+
+  } catch (error) {
+    console.error('[Camera Controller] ❌ Failed to get capture history:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve capture history',
+    });
+  }
+}
+
+/**
+ * Start camera-based generation (async function)
+ */
+async function startCameraGeneration(
+  userId: string,
+  captureId: string,
+  generationId: string,
+  modelId: string,
+  styleId: string,
+  prompt: string,
+  quality: string,
+  aspectRatio: string
+) {
+  try {
+    console.log('[Camera Controller] 🎨 Starting camera generation:', generationId);
+
+    // Update capture record to link with generation
+    await query(
+      'UPDATE camera_captures SET generation_id = $1, status = $2 WHERE id = $3',
+      [generationId, 'generated', captureId]
+    );
+
+    // Create generation record
+    // Hardcode style_id for camera captures
+    const hardcodedStyleId = '1b798b54-03da-446a-93bf-12fcba1050d7';
+    const generationQuery = `
+      INSERT INTO generations (id, user_id, model_id, style_id, prompt, quality, aspect_ratio, status, metadata)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `;
+    
+    await query(generationQuery, [
+      generationId,
+      userId,
+      modelId, // This could be higgsfield_id
+      hardcodedStyleId, // Use hardcoded style ID for camera captures
+      prompt,
+      quality,
+      aspectRatio,
+      'processing',
+      JSON.stringify({ source: 'camera', captureId })
+    ]);
+
+    // Start the actual generation with 302.AI
+    // This will handle the async generation process
+    await generateWithCharacter({
+      prompt,
+      style_id: hardcodedStyleId,
+      higgsfield_id: modelId,
+      quality: quality === 'premium' ? 'high' : 'basic',
+      aspect_ratio: aspectRatio,
+    });
+
+    console.log('[Camera Controller] ✅ Camera generation initiated successfully');
+
+  } catch (error) {
+    console.error('[Camera Controller] ❌ Camera generation failed:', error);
+    
+    // Update status to failed
+    await query(
+      'UPDATE camera_captures SET status = $1 WHERE id = $2',
+      ['failed', captureId]
+    );
+  }
+}

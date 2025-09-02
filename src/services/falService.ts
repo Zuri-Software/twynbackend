@@ -39,7 +39,7 @@ export async function trainLoRA(imageBuffers: Buffer[]) {
   const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
 
   // 2. Upload ZIP to Fal storage
-  const zipFile = new File([zipBuffer], 'images.zip', { type: 'application/zip' });
+  const zipFile = new File([new Uint8Array(zipBuffer)], 'images.zip', { type: 'application/zip' });
   const url = await fal.storage.upload(zipFile);
 
   // 3. Submit the training job using the uploaded file URL

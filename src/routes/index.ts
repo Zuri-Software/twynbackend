@@ -6,6 +6,7 @@ import usersRouter from './users';
 import authRouter from './auth';
 import onboardingRouter from './onboarding';
 import modelsRouter from './models';
+import cameraRouter from './camera';
 
 const router = Router();
 
@@ -16,5 +17,6 @@ router.use('/images', imagesRouter);
 router.use('/users', usersRouter);
 router.use('/onboarding', onboardingRouter);
 router.use('/models', modelsRouter);
+router.use('/camera', cameraRouter);
 
 export default router;
