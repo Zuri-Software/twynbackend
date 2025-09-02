@@ -33,9 +33,16 @@ export async function captureAndAnalyze(req: Request, res: Response) {
   try {
     console.log('[Camera Controller] 📸 Processing camera capture request');
     
-    const { modelId, styleId, quality = 'basic', aspectRatio = '1:1', generateImmediately = false } = req.body;
+    const { captureId, modelId, styleId, quality = 'basic', aspectRatio = '1:1', generateImmediately = false } = req.body;
     const userId = req.user!.id;
     
+    // Check if this is generation on existing capture or new capture
+    if (captureId && generateImmediately === 'true') {
+      console.log('[Camera Controller] 🔄 Processing generation for existing capture:', captureId);
+      return await handleExistingCaptureGeneration(req, res, userId, captureId, modelId, styleId, quality, aspectRatio);
+    }
+    
+    // For new captures, require photo
     if (!req.file) {
       return res.status(400).json({
         success: false,
@@ -110,7 +117,7 @@ export async function captureAndAnalyze(req: Request, res: Response) {
       }
 
       // Return success response
-      res.json({
+      const responseData = {
         success: true,
         data: {
           captureId,
@@ -119,7 +126,10 @@ export async function captureAndAnalyze(req: Request, res: Response) {
           estimatedTime,
           metadata: analysisResult.metadata,
         },
-      });
+      };
+      
+      console.log('[Camera Controller] 📤 Sending response to frontend:', JSON.stringify(responseData, null, 2));
+      res.json(responseData);
 
     } catch (processingError) {
       console.error('[Camera Controller] ❌ Processing error:', processingError);
@@ -241,6 +251,68 @@ export async function getCaptureHistory(req: Request, res: Response) {
     res.status(500).json({
       success: false,
       error: 'Failed to retrieve capture history',
+    });
+  }
+}
+
+/**
+ * Handle generation for existing capture (no photo upload needed)
+ */
+async function handleExistingCaptureGeneration(
+  req: Request,
+  res: Response,
+  userId: string,
+  captureId: string,
+  modelId: string,
+  styleId: string,
+  quality: string,
+  aspectRatio: string
+) {
+  try {
+    console.log('[Camera Controller] 🎨 Starting generation for existing capture:', captureId);
+    
+    // Get existing capture from database
+    const captureQuery = 'SELECT * FROM camera_captures WHERE id = $1 AND user_id = $2';
+    const captureResult = await query(captureQuery, [captureId, userId]);
+    
+    if (!captureResult.rows.length) {
+      return res.status(404).json({
+        success: false,
+        error: 'Capture not found',
+      });
+    }
+    
+    const capture = captureResult.rows[0];
+    
+    if (!capture.generated_prompt) {
+      return res.status(400).json({
+        success: false,
+        error: 'Capture not analyzed yet',
+      });
+    }
+    
+    // Generate unique generation ID
+    const generationId = `gen_${userId}_${Date.now()}`;
+    
+    // Start the generation (async)
+    startCameraGeneration(userId, captureId, generationId, modelId, styleId, capture.generated_prompt, quality, aspectRatio);
+    
+    // Return success response immediately
+    res.json({
+      success: true,
+      data: {
+        captureId,
+        generationId,
+        estimatedTime: 60,
+        prompt: capture.generated_prompt,
+      },
+    });
+    
+  } catch (error) {
+    console.error('[Camera Controller] ❌ Existing capture generation failed:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to start generation',
     });
   }
 }
