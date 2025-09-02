@@ -360,8 +360,8 @@ async function startCameraGeneration(
     ]);
 
     // Start the actual generation with 302.AI
-    // This will handle the async generation process
-    await generateWithCharacter({
+    console.log('[Camera Controller] 🚀 Starting 302.AI generation...');
+    const generationResult = await generateWithCharacter({
       prompt,
       style_id: hardcodedStyleId,
       higgsfield_id: modelId,
@@ -369,7 +369,64 @@ async function startCameraGeneration(
       aspect_ratio: aspectRatio,
     });
 
-    console.log('[Camera Controller] ✅ Camera generation initiated successfully');
+    const { imageUrls, jobBatchId } = generationResult;
+    console.log(`[Camera Controller] ✅ Got ${imageUrls.length} images from 302.AI, job batch: ${jobBatchId}`);
+
+    // S3 folder structure - same as regular generation
+    const s3Folder = `users/${userId}/${modelId}/generations`;
+
+    // Download images from 302.AI and upload to S3
+    console.log('[Camera Controller] ⬇️ Downloading and uploading images to S3...');
+    const s3Images = await Promise.all(
+      imageUrls.map(async (imageUrl, index) => {
+        try {
+          const response = await fetch(imageUrl);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch image ${index + 1}: ${response.status}`);
+          }
+          const buffer = Buffer.from(await response.arrayBuffer());
+          return await uploadBuffer(buffer, s3Folder, 'image/jpeg');
+        } catch (error) {
+          console.error(`[Camera Controller] ❌ Error processing image ${index + 1}:`, error);
+          throw error;
+        }
+      })
+    );
+
+    console.log(`[Camera Controller] ✅ Uploaded ${s3Images.length} images to S3`);
+
+    // Update generation record with completed images
+    await query(
+      `UPDATE generations 
+       SET status = 'completed', image_urls = $1, image_count = $2, higgsfield_id = $3, completed_at = NOW()
+       WHERE id = $4`,
+      [s3Images, s3Images.length, jobBatchId, generationId]
+    );
+
+    console.log('[Camera Controller] ✅ Updated generation record in database');
+
+    // Track usage metrics (import at runtime to avoid circular dependencies)
+    const { incrementGenerationCount } = await import('../services/userService');
+    await incrementGenerationCount(userId, s3Images.length);
+    await logUserAction(userId, 'generate', s3Images.length, {
+      generationId,
+      prompt,
+      style_id: hardcodedStyleId,
+      higgsfield_id: modelId,
+      quality: quality === 'premium' ? 'high' : 'basic',
+      aspect_ratio: aspectRatio,
+      imageCount: s3Images.length,
+      source: 'camera',
+      captureId,
+      timestamp: new Date()
+    });
+
+    console.log('[Camera Controller] ✅ Tracked usage metrics');
+
+    // Send push notification
+    await sendCameraGenerationCompletedNotification(userId, generationId, s3Images);
+
+    console.log('[Camera Controller] ✅ Camera generation completed successfully');
 
   } catch (error) {
     console.error('[Camera Controller] ❌ Camera generation failed:', error);
@@ -379,5 +436,27 @@ async function startCameraGeneration(
       'UPDATE camera_captures SET status = $1 WHERE id = $2',
       ['failed', captureId]
     );
+  }
+}
+
+// Push notification for camera generation completion
+async function sendCameraGenerationCompletedNotification(userId: string, generationId: string, imageUrls: string[]) {
+  try {
+    const { pushNotificationService } = require('../services/pushNotificationService');
+    
+    await pushNotificationService.sendToUser(userId, {
+      title: "Camera Avatar Complete!",
+      body: `Your ${imageUrls.length} camera-generated avatars are ready to view`,
+      type: 'generation_complete',
+      data: { 
+        generationId, 
+        source: 'camera',
+        imageUrls: imageUrls.slice(0, 4) // Limit URL array size in notification
+      }
+    });
+    
+    console.log(`[Camera Controller] ✅ Sent camera generation completion notification to user ${userId}: Generation ${generationId}`);
+  } catch (error) {
+    console.error(`[Camera Controller] ❌ Failed to send camera generation notification to user ${userId}:`, error);
   }
 }
